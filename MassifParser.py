@@ -3,6 +3,16 @@ __author__ = 'Thom Hurks'
 import os
 import re
 
+# Algorithm IDs:
+# 0 is semi-naive
+# 1 is smart
+# 2 is SSC1
+# 3 is SSC2
+# 4 is SSC12
+algorithmNames = ["SemiNaive", "Smart", "SSC1", "SSC2", "SSC12"]
+# Set this to True/False if you want readable algorithm names or just the IDs.
+outputAlgorithmNamesReadable = False
+
 # Regular expressions to parse the input lines.
 re_peak = re.compile('Detailed snapshots: \[.*?(?P<peak>\d+) \(peak\).*\]')
 re_new = re.compile('Output for algorithm (?P<algo>\d) on dataset (?P<dataset>.+) with (?P<threads>\d{1,2}) threads')
@@ -82,6 +92,8 @@ if os.path.isfile(inputFileName):
                             re_line = None
                             print(line)
                             print("data used: " + memory)
+                            if outputAlgorithmNamesReadable:
+                                algo = algorithmNames[int(algo)]
                             outputFile.write('\"' + dataset + '\"\t\"' + algo + '\"\t\"' + threads + '\"\t\"' + memory + '\"\n')
                             # Clear data after writing.
                             algo = None
