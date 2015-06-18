@@ -1,4 +1,5 @@
 __author__ = 'Thom Hurks'
+# Implementation of a Hybrid Single Source Closure (SSC12) algorithm, specifically the transitive closure.
 # Made for the course Database Technology at the TU/e (University of Technology Eindhoven)
 # Algorithms based on the paper "Main Memory Evaluation of Recursive Queries on Multicore Machines"
 # by Yang and Zaniolo (University of California, Los Angeles), 2014 IEEE International Conference on Big Data.
