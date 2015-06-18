@@ -246,7 +246,7 @@ for i in range(0, cpuCount):
 print(str.format("Beginning closure processing with {0} parallel threads and thresholds alpha = {0} and beta = {1}...",
                  cpuCount, alpha, beta))
 startTime = timer()
-# Call SSC2 algorithm:
+# Call SSC12 algorithm:
 computedClosure = Closure(vertexQueue, cpuCount, len(sourceVertices), alpha, beta, len(allVertices))
 endTime = timer()
 elapsedTime = endTime - startTime
