@@ -1,4 +1,9 @@
 __author__ = 'Thom Hurks'
+# Made for the course Database Technology at the TU/e (University of Technology Eindhoven)
+# Algorithms based on the paper "Main Memory Evaluation of Recursive Queries on Multicore Machines"
+# by Yang and Zaniolo (University of California, Los Angeles), 2014 IEEE International Conference on Big Data.
+
+# Tested ONLY using Python 3.4.3 running on Mac OS X Yosemite.
 
 import os
 import re
@@ -10,6 +15,14 @@ import multiprocessing
 inputFileName = "../Datasets/kronecker_graph3.txt"
 outputFileName = "closure_SSC1_"
 outputExtension = ".txt"
+
+# Input:
+# Expects a directed graph in a text file of the form:
+# FromNodeId	ToNodeId
+# 0 9
+# 0 40
+# 0 68
+# So on each line <number representing from node><tab character><number representing to node>
 
 line_re = re.compile("(?P<nr1>\d+)\t(?P<nr2>\d+)")
 
