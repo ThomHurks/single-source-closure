@@ -46,6 +46,7 @@ if os.path.isfile(inputFileName):
         allVertices = set()
         toVertices = set()
         adjacentLookup = dict()
+        errorParsing = False
         for line in graphFile:
             lineCounter += 1
             # Useful content starts after header offset.
@@ -94,18 +95,35 @@ sourceVertices = allVertices.difference(toVertices)
 print("Source Vertices: " + str(len(sourceVertices)))
 
 # SSC2 Algorithm (defined in 3 functions):
-def Closure(sourceVertices, pool, chunkSize):
+def Closure(vertexQueue, cpuCount, sourceVertexCount):
     closureSet = set()
     emptyList = [-1] * nodeCount
+    SSCQueue = multiprocessing.Queue()
+    processList = []
+    for _ in range(0, cpuCount):
+        processList.append(multiprocessing.Process(target=SSCWorker, args=(vertexQueue, SSCQueue, emptyList), daemon=True))
+
+    for process in processList:
+        process.start()
+
+    doneCounter = 0
+    while doneCounter < sourceVertexCount:
+        ssc = SSCQueue.get()
+        closureSet = closureSet.union(ssc)
+        doneCounter += 1
+
+    return closureSet
+
+def SSCWorker(vertexQueue, SSCQueue, emptyList):
     bigDeltaTC = array('i', emptyList)
     smallDeltaTC = array('i', emptyList)
     d = bitarray(nodeCount)
-
-    # Todo: mapping is easy, but it currently instantiates too much arrays while it can reuse them per thread. Fix this.
-    for ssc in pool.imap_unordered(partial(SSC2, bigDeltaTC=bigDeltaTC, smallDeltaTC=smallDeltaTC, d=d), sourceVertices, chunkSize):
-        closureSet = closureSet.union(ssc)
-
-    return closureSet
+    while True:
+        vertex = vertexQueue.get()
+        if vertex is not None:
+            SSCQueue.put(SSC2(vertex, bigDeltaTC, smallDeltaTC, d))
+        else:
+            break
 
 def SSC2(sourceVertex, bigDeltaTC, smallDeltaTC, d):
     tc = set()
@@ -133,13 +151,19 @@ def SSC2(sourceVertex, bigDeltaTC, smallDeltaTC, d):
 def GetAllAdjacentNodes(inputVertex):
     return adjacentLookup.get(inputVertex, set())
 
+# Setup multiprocessing:
 cpuCount = multiprocessing.cpu_count()
-pool = multiprocessing.Pool(cpuCount)
-chunkSize = (len(sourceVertices) // cpuCount) // 50
-print(str.format("Beginning closure processing with {0} parallel threads and chunk size {1}...", cpuCount, chunkSize))
+vertexQueue = multiprocessing.Queue()
+# Prepare multiprocessing jobs:
+for sourceVertex in sourceVertices:
+    vertexQueue.put(sourceVertex)
+# Insert sentinel values:
+for i in range(0, cpuCount):
+    vertexQueue.put(None)
+print(str.format("Beginning closure processing with {0} parallel threads...", cpuCount))
 startTime = timer()
 # Call SSC2 algorithm:
-computedClosure = Closure(sourceVertices, pool, chunkSize)
+computedClosure = Closure(vertexQueue, cpuCount, len(sourceVertices))
 endTime = timer()
 elapsedTime = endTime - startTime
 print("Elapsed time: " + str(elapsedTime) + " seconds.")
