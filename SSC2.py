@@ -70,8 +70,12 @@ if os.path.isfile(inputFileName):
                             fromNode.add(nr2)
                             adjacentLookup[nr1] = fromNode
                     else:
-                        outputFile.close()
-                        sys.exit("Input has wrong format!")
+                        errorParsing = True
+                else:
+                    errorParsing = True
+            if errorParsing:
+                outputFile.close()
+                sys.exit("Input has wrong format!")
         print("Done parsing " + str(lineCounter - headerOffset) + " lines. Output will be written to " + outputFileNameFinal)
 else:
         print("File does not exist: " + inputFileName)
@@ -90,7 +94,7 @@ sourceVertices = allVertices.difference(toVertices)
 print("Source Vertices: " + str(len(sourceVertices)))
 
 # SSC2 Algorithm (defined in 3 functions):
-def Closure(sourceVertices, pool):
+def Closure(sourceVertices, pool, chunkSize):
     closureSet = set()
     emptyList = [-1] * nodeCount
     bigDeltaTC = array('i', emptyList)
@@ -98,11 +102,9 @@ def Closure(sourceVertices, pool):
     d = bitarray(nodeCount)
 
     # Todo: mapping is easy, but it currently instantiates too much arrays while it can reuse them per thread. Fix this.
-    results = pool.map(partial(SSC2, bigDeltaTC=bigDeltaTC, smallDeltaTC=smallDeltaTC, d=d), sourceVertices)
-    pool.close()
-    pool.join()
-    for ssc in results:
+    for ssc in pool.imap_unordered(partial(SSC2, bigDeltaTC=bigDeltaTC, smallDeltaTC=smallDeltaTC, d=d), sourceVertices, chunkSize):
         closureSet = closureSet.union(ssc)
+
     return closureSet
 
 def SSC2(sourceVertex, bigDeltaTC, smallDeltaTC, d):
@@ -133,10 +135,11 @@ def GetAllAdjacentNodes(inputVertex):
 
 cpuCount = multiprocessing.cpu_count()
 pool = multiprocessing.Pool(cpuCount)
-print(str.format("Beginning closure processing with {0} parallel threads...", cpuCount))
+chunkSize = (len(sourceVertices) // cpuCount) // 50
+print(str.format("Beginning closure processing with {0} parallel threads and chunk size {1}...", cpuCount, chunkSize))
 startTime = timer()
 # Call SSC2 algorithm:
-computedClosure = Closure(sourceVertices, pool)
+computedClosure = Closure(sourceVertices, pool, chunkSize)
 endTime = timer()
 elapsedTime = endTime - startTime
 print("Elapsed time: " + str(elapsedTime) + " seconds.")

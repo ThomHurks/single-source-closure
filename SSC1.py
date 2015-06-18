@@ -43,6 +43,7 @@ if os.path.isfile(inputFileName):
         allVertices = set()
         toVertices = set()
         adjacentLookup = dict()
+        errorParsing = False
         for line in graphFile:
             lineCounter += 1
             # Useful content starts after header offset.
@@ -67,8 +68,12 @@ if os.path.isfile(inputFileName):
                             fromNode.add(nr2)
                             adjacentLookup[nr1] = fromNode
                     else:
-                        outputFile.close()
-                        sys.exit("Input has wrong format!")
+                        errorParsing = True
+                else:
+                    errorParsing = True
+            if errorParsing:
+                outputFile.close()
+                sys.exit("Input has wrong format!")
         print("Done parsing " + str(lineCounter - headerOffset) + " lines. Output will be written to " + outputFileNameFinal)
 else:
         print("File does not exist: " + inputFileName)
@@ -87,12 +92,9 @@ sourceVertices = allVertices.difference(toVertices)
 print("Source Vertices: " + str(len(sourceVertices)))
 
 # SSC1 Algorithm (defined in 3 functions):
-def Closure(sourceVertices, pool):
+def Closure(sourceVertices, pool, chunkSize):
     closureSet = set()
-    results = pool.map(SSC1, sourceVertices)
-    pool.close()
-    pool.join()
-    for ssc in results:
+    for ssc in pool.imap_unordered(SSC1, sourceVertices, chunkSize):
         closureSet = closureSet.union(ssc)
     return closureSet
 
@@ -117,10 +119,11 @@ def GetAllAdjacentNodesFromSet(inputSet):
 
 cpuCount = multiprocessing.cpu_count()
 pool = multiprocessing.Pool(cpuCount)
-print(str.format("Beginning closure processing with {0} parallel threads...", cpuCount))
+chunkSize = (len(sourceVertices) // cpuCount) // 50
+print(str.format("Beginning closure processing with {0} parallel threads and chunk size {1}...", cpuCount, chunkSize))
 startTime = timer()
 # Call SSC1 algorithm:
-computedClosure = Closure(sourceVertices, pool)
+computedClosure = Closure(sourceVertices, pool, chunkSize)
 endTime = timer()
 elapsedTime = endTime - startTime
 print("Elapsed time: " + str(elapsedTime) + " seconds.")
