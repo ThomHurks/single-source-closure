@@ -6,6 +6,8 @@ import sys
 from timeit import default_timer as timer
 from array import array
 from bitarray import bitarray
+import multiprocessing
+from functools import partial
 
 # Use this to set input/output names and output extension.
 inputFileName = "../Datasets/kronecker_graph3.txt"
@@ -87,17 +89,19 @@ print("Non-Source Vertices: " + str(len(toVertices)))
 sourceVertices = allVertices.difference(toVertices)
 print("Source Vertices: " + str(len(sourceVertices)))
 
-print("Beginning closure processing...")
-
 # SSC2 Algorithm (defined in 3 functions):
-def Closure(sourceVertices):
+def Closure(sourceVertices, pool):
     closureSet = set()
     emptyList = [-1] * nodeCount
     bigDeltaTC = array('i', emptyList)
     smallDeltaTC = array('i', emptyList)
     d = bitarray(nodeCount)
-    for vertex in sourceVertices:
-        ssc = SSC2(vertex, bigDeltaTC, smallDeltaTC, d)
+
+    # Todo: mapping is easy, but it currently instantiates too much arrays while it can reuse them per thread. Fix this.
+    results = pool.map(partial(SSC2, bigDeltaTC=bigDeltaTC, smallDeltaTC=smallDeltaTC, d=d), sourceVertices)
+    pool.close()
+    pool.join()
+    for ssc in results:
         closureSet = closureSet.union(ssc)
     return closureSet
 
@@ -127,9 +131,12 @@ def SSC2(sourceVertex, bigDeltaTC, smallDeltaTC, d):
 def GetAllAdjacentNodes(inputVertex):
     return adjacentLookup.get(inputVertex, set())
 
+cpuCount = multiprocessing.cpu_count()
+pool = multiprocessing.Pool(cpuCount)
+print(str.format("Beginning closure processing with {0} parallel threads...", cpuCount))
 startTime = timer()
 # Call SSC2 algorithm:
-computedClosure = Closure(sourceVertices)
+computedClosure = Closure(sourceVertices, pool)
 endTime = timer()
 elapsedTime = endTime - startTime
 print("Elapsed time: " + str(elapsedTime) + " seconds.")

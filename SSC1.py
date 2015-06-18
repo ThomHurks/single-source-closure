@@ -4,6 +4,7 @@ import os
 import re
 import sys
 from timeit import default_timer as timer
+import multiprocessing
 
 # Use this to set input/output names and output extension.
 inputFileName = "../Datasets/kronecker_graph3.txt"
@@ -85,13 +86,13 @@ print("Non-Source Vertices: " + str(len(toVertices)))
 sourceVertices = allVertices.difference(toVertices)
 print("Source Vertices: " + str(len(sourceVertices)))
 
-print("Beginning closure processing...")
-
 # SSC1 Algorithm (defined in 3 functions):
-def Closure(sourceVertices):
+def Closure(sourceVertices, pool):
     closureSet = set()
-    for vertex in sourceVertices:
-        ssc = SSC1(vertex)
+    results = pool.map(SSC1, sourceVertices)
+    pool.close()
+    pool.join()
+    for ssc in results:
         closureSet = closureSet.union(ssc)
     return closureSet
 
@@ -114,9 +115,12 @@ def GetAllAdjacentNodesFromSet(inputSet):
             resultSet = resultSet.union(adjacentSet)
     return resultSet
 
+cpuCount = multiprocessing.cpu_count()
+pool = multiprocessing.Pool(cpuCount)
+print(str.format("Beginning closure processing with {0} parallel threads...", cpuCount))
 startTime = timer()
 # Call SSC1 algorithm:
-computedClosure = Closure(sourceVertices)
+computedClosure = Closure(sourceVertices, pool)
 endTime = timer()
 elapsedTime = endTime - startTime
 print("Elapsed time: " + str(elapsedTime) + " seconds.")
