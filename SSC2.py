@@ -29,6 +29,9 @@ outputExtension = ".txt"
 # 0 68
 # So on each line <number representing from node><tab character><number representing to node>
 
+# The test graphs we used were Kronecker graphs generated using the Stanford Network Analysis Platform (SNAP)
+# URL: https://github.com/snap-stanford/snap/tree/master/examples/krongen
+
 line_re = re.compile("(?P<nr1>\d+)\t(?P<nr2>\d+)")
 
 lineCounter = 0
