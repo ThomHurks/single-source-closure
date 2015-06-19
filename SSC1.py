@@ -13,9 +13,16 @@ from timeit import default_timer as timer
 import multiprocessing
 
 # Use this to set input/output names and output extension.
-inputFileName = "../Datasets/kronecker_graph3.txt"
+inputFileName = "../Datasets/kronecker_graph4.txt"
 outputFileName = "closure_SSC1_"
 outputExtension = ".txt"
+
+# The amount of job chunks that each thread should process, on average.
+# This value is a bit "vague" in that you can only really determine the best value experimentally.
+# If it is 1, then each thread gets one big chunk of jobs and if it finished sooner than the rest
+# because its jobs "just happened" to be light, then it sits around doing nothing.
+# A too high value means the job chunks are very small and there is more overhead of getting new jobs.
+chunksPerCPU = 50
 
 # Input:
 # Expects a directed graph in a text file of the form:
@@ -50,7 +57,7 @@ if os.path.isfile(inputFileName):
                 outputFile = open(outputFileNameFinal, 'x')
                 if outputFile.writable():
                     # Write the file header.
-                    outputFile.write('"Vertex"\n')
+                    outputFile.write(str.format("# Run of SSC1 on input {0}\n", inputFileName))
                     outputCreated = True
             except FileExistsError:
                 attemptCounter += 1
@@ -106,7 +113,11 @@ print("Highest Vertex ID: " + str(nodeCount))
 print("Vertex Count: " + str(len(allVertices)))
 print("Non-Source Vertices: " + str(len(toVertices)))
 sourceVertices = allVertices.difference(toVertices)
-print("Source Vertices: " + str(len(sourceVertices)))
+if len(sourceVertices) > 0:
+    print("Source Vertices: " + str(len(sourceVertices)))
+else:
+    print("0 Source vertices found!")
+    sys.exit("0 Source Vertices found!")
 
 # SSC1 Algorithm (defined in 3 functions):
 def Closure(sourceVertices, pool, chunkSize):
@@ -134,9 +145,9 @@ def GetAllAdjacentNodesFromSet(inputSet):
             resultSet = resultSet.union(adjacentSet)
     return resultSet
 
-cpuCount = multiprocessing.cpu_count()
+cpuCount = min(multiprocessing.cpu_count(), len(sourceVertices))
 pool = multiprocessing.Pool(cpuCount)
-chunkSize = (len(sourceVertices) // cpuCount) // 50
+chunkSize = max((len(sourceVertices) // cpuCount) // chunksPerCPU, 1)
 print(str.format("Beginning closure processing with {0} parallel threads and chunk size {1}...", cpuCount, chunkSize))
 startTime = timer()
 # Call SSC1 algorithm:
@@ -145,8 +156,10 @@ endTime = timer()
 elapsedTime = endTime - startTime
 print("Elapsed time: " + str(elapsedTime) + " seconds.")
 print("Closure Size: " + str(len(computedClosure)))
+outputFile.write(str.format("# Elapsed time: {0} seconds\n", elapsedTime))
 print("Writing closure output to file...")
 sortedClosure = sorted(computedClosure)
+outputFile.write('"Vertex"\n')
 for vertex in sortedClosure:
     outputFile.write('\"' + str(vertex) + '\"\n')
 outputFile.close()

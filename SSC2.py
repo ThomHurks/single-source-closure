@@ -18,7 +18,7 @@ from bitarray import bitarray
 import multiprocessing
 
 # Use this to set input/output names and output extension.
-inputFileName = "../Datasets/kronecker_graph3.txt"
+inputFileName = "../Datasets/tree-10000.txt"
 outputFileName = "closure_SSC2_"
 outputExtension = ".txt"
 
@@ -55,7 +55,7 @@ if os.path.isfile(inputFileName):
                 outputFile = open(outputFileNameFinal, 'x')
                 if outputFile.writable():
                     # Write the file header.
-                    outputFile.write('"Vertex"\n')
+                    outputFile.write(str.format("# Run of SSC2 on input {0}\n", inputFileName))
                     outputCreated = True
             except FileExistsError:
                 attemptCounter += 1
@@ -111,7 +111,11 @@ print("Highest Vertex ID: " + str(nodeCount))
 print("Vertex Count: " + str(len(allVertices)))
 print("Non-Source Vertices: " + str(len(toVertices)))
 sourceVertices = allVertices.difference(toVertices)
-print("Source Vertices: " + str(len(sourceVertices)))
+if len(sourceVertices) > 0:
+    print("Source Vertices: " + str(len(sourceVertices)))
+else:
+    print("0 Source vertices found!")
+    sys.exit("0 Source Vertices found!")
 
 # SSC2 Algorithm (defined in 3 functions):
 def Closure(vertexQueue, cpuCount, sourceVertexCount):
@@ -171,9 +175,10 @@ def GetAllAdjacentNodes(inputVertex):
     return adjacentLookup.get(inputVertex, set())
 
 # Setup multiprocessing:
-cpuCount = multiprocessing.cpu_count()
+cpuCount = min(multiprocessing.cpu_count(), len(sourceVertices))
 vertexQueue = multiprocessing.Queue()
 # Prepare multiprocessing jobs:
+print("Preparing multithreading jobs, this can take time...")
 for sourceVertex in sourceVertices:
     vertexQueue.put(sourceVertex)
 # Insert sentinel values:
@@ -187,8 +192,10 @@ endTime = timer()
 elapsedTime = endTime - startTime
 print("Elapsed time: " + str(elapsedTime) + " seconds.")
 print("Closure Size: " + str(len(computedClosure)))
+outputFile.write(str.format("# Elapsed time: {0} seconds\n", elapsedTime))
 print("Writing closure output to file...")
 sortedClosure = sorted(computedClosure)
+outputFile.write('"Vertex"\n')
 for vertex in sortedClosure:
     outputFile.write('\"' + str(vertex) + '\"\n')
 outputFile.close()
