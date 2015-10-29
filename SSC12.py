@@ -9,6 +9,17 @@ __author__ = 'Thom Hurks'
 # To implement Boolean Arrays, we used the extra Python bitarray module, version 0.8.1
 # URL: https://pypi.python.org/pypi/bitarray/ (Make sure to install this before running the code)
 
+# Input:
+# Expects a directed graph in a text file of the form:
+# FromNodeId	ToNodeId
+# 0 9
+# 0 40
+# 0 68
+# So on each line <number representing from node><tab character><number representing to node>
+
+# The test graphs we use are Kronecker graphs generated using the Stanford Network Analysis Platform (SNAP)
+# URL: https://github.com/snap-stanford/snap/tree/master/examples/krongen
+
 import os
 import re
 import sys
@@ -20,11 +31,17 @@ import argparse
 from queue import Full
 from signal import SIGTERM
 
+# Determine the cutoff point between SSC1 and SSC2
+# alpha = 1/8
+# beta = 1/128
+
 
 def ParseArgs():
     parser = argparse.ArgumentParser(description='Run the SSC12 algorithm on an input graph')
     parser.add_argument('inputfile', action='store', type=str, help='The text file that the graph will be read from.', metavar='inputfile')
     parser.add_argument('outputfile', action='store', type=str, help='The file that the CSV output will be written to.', metavar='outputfile')
+    parser.add_argument('alpha', action='store', type=float, help='Determines the cutoff point between SSC1 and SSC2.', metavar='alpha')
+    parser.add_argument('beta', action='store', type=float, help='Determines the cutoff point between SSC1 and SSC2.', metavar='beta')
     parser.add_argument('--overwrite', action='store_true', required=False, help='Overwrite the output file if it already exists.')
     parser.add_argument('--nofail', action='store_true', required=False, help='Overwrite the output file if it already exists.')
     return parser.parse_args()
@@ -77,48 +94,16 @@ def CreateUniqueOutputfile(outputFilename, extension):
     return outputFile, outputFilenameFinal
 
 
-args = ParseArgs()
-inputFilename = args.inputfile
-if not os.path.isfile(inputFilename):
-    print("Input file does not exist: %s" % inputFilename)
-    exit(1)
-outputFilename = GetValidOutputFilename(args.outputfile, args.overwrite, args.nofail)
-
-# Input:
-# Expects a directed graph in a text file of the form:
-# FromNodeId	ToNodeId
-# 0 9
-# 0 40
-# 0 68
-# So on each line <number representing from node><tab character><number representing to node>
-
-# The test graphs we used were Kronecker graphs generated using the Stanford Network Analysis Platform (SNAP)
-# URL: https://github.com/snap-stanford/snap/tree/master/examples/krongen
-
-# Determine the cutoff point between SSC1 and SSC2
-alpha = 1/8
-beta = 1/128
-
-line_re = re.compile("(?P<nr1>\d+)\t(?P<nr2>\d+)")
-
-lineCounter = 0
-# Use this to skip useless headers in the input file.
-headerOffset = 4
-
-nodeCount = -1
-# Read in the input file.
-with open(inputFilename) as graphFile:
-    # Start reading in the input file
-    # Parsing state variables:
-    graph = set()
-    allVertices = set()
-    toVertices = set()
+def ParseInputfile(inputFilename):
+    # Lines starting with "#" are ignored.
+    line_re = re.compile("^(?!#)(?P<nr1>\d+)\t(?P<nr2>\d+)")
+    maxVertexNumber = -1
     adjacentLookup = dict()
-    errorParsing = False
-    for line in graphFile:
-        lineCounter += 1
-        # Useful content starts after header offset.
-        if lineCounter > headerOffset:
+    sourceVertices = set()
+    targetVertices = set()
+    with open(inputFilename) as graphFile:
+        # Start reading in the input file
+        for line in graphFile:
             lineResult = line_re.search(line)
             if lineResult is not None:
                 nr1 = lineResult.group("nr1")
@@ -126,44 +111,31 @@ with open(inputFilename) as graphFile:
                 if nr1 is not None and nr2 is not None:
                     nr1 = int(nr1)
                     nr2 = int(nr2)
-                    nodeCount = max(nr1, nr2, nodeCount)
-                    graph.add((nr1, nr2))
-                    allVertices.add(nr1)
-                    allVertices.add(nr2)
-                    toVertices.add(nr2)
-                    fromNode = adjacentLookup.get(nr1, None)
-                    if fromNode is not None:
-                        fromNode.add(nr2)
-                    else:
-                        fromNode = set()
-                        fromNode.add(nr2)
-                        adjacentLookup[nr1] = fromNode
+                    sourceVertices.add(nr1)
+                    targetVertices.add(nr2)
+                    maxVertexNumber = max(nr1, nr2, maxVertexNumber)
+                    fromNode = adjacentLookup.get(nr1, set())
+                    fromNode.add(nr2)
+                    adjacentLookup[nr1] = fromNode
                 else:
-                    errorParsing = True
-            else:
-                errorParsing = True
-        if errorParsing:
-            sys.exit("Input has wrong format!")
-    print("Done parsing " + str(lineCounter - headerOffset) + " lines. Output will be written to " + outputFilename)
-
-if graph is None or adjacentLookup is None or len(graph) == 0 or len(adjacentLookup) == 0 or nodeCount <= 0:
-    print("Input graph is empty!")
-    exit(1)
-# Since arrays are 0-based.
-nodeCount += 1
-print("Highest Vertex ID: " + str(nodeCount))
-print("Vertex Count: " + str(len(allVertices)))
-print("Non-Source Vertices: " + str(len(toVertices)))
-sourceVertices = allVertices.difference(toVertices)
-if len(sourceVertices) > 0:
-    print("Source Vertices: " + str(len(sourceVertices)))
-else:
-    print("0 Source vertices found!")
-    sys.exit("0 Source Vertices found!")
+                    sys.exit("Input has wrong format!")
+    uniqueSourceVertices = sourceVertices.difference(targetVertices)
+    uniqueTargetVertexCount = len(targetVertices.difference(sourceVertices))
+    uniqueVertexCount = len(uniqueSourceVertices) + uniqueTargetVertexCount
+    if maxVertexNumber <= 0 or uniqueVertexCount <= 1 or len(sourceVertices) == 0:
+        print("Input graph is empty!")
+        exit(1)
+    # Since vertex numbers are 0 based and we want to fit the number 0 too.
+    maxVertexNumber += 1
+    print("Highest Vertex ID: %d" % maxVertexNumber)
+    print("Vertex Count: %d" % uniqueVertexCount)
+    print("Non-Source Vertices: %d" % uniqueTargetVertexCount)
+    print("Source Vertices: %d" % len(sourceVertices))
+    return adjacentLookup, uniqueSourceVertices, uniqueVertexCount, maxVertexNumber
 
 
 # SSC12 Algorithm (defined in several functions):
-def Closure(sourceVertices, alpha, beta, nrOfVertices):
+def Closure(sourceVertices, adjacentLookup, alpha, beta, nrOfVertices, maxVertexNumber):
     # Setup multiprocessing:
     cpuCount = min(multiprocessing.cpu_count(), len(sourceVertices))
     print("Beginning closure processing with %d parallel threads and thresholds alpha = %d and beta = %d..." %
@@ -173,15 +145,15 @@ def Closure(sourceVertices, alpha, beta, nrOfVertices):
     vertexQueue = multiprocessing.Queue()
     SSCQueue = multiprocessing.Queue()
     processList = []
-    adderReturnCode = None
 
     alphaThreshold = nrOfVertices / alpha
     betaThreshold = nrOfVertices / beta
     print(str.format("Thresholds in terms of n: alpha = {0}, beta = {1}, n = {2}", alphaThreshold, betaThreshold, nrOfVertices))
 
     for _ in range(0, cpuCount):
-        processList.append(multiprocessing.Process(target=SSCWorker, args=(vertexQueue, SSCQueue,
-                                                                           alphaThreshold, betaThreshold), daemon=True))
+        processList.append(multiprocessing.Process(target=SSCWorker, args=(vertexQueue, SSCQueue, adjacentLookup,
+                                                                           alphaThreshold, betaThreshold, maxVertexNumber),
+                                                   daemon=True))
     adderProcess = multiprocessing.Process(target=SourceVertexQueueAdder, args=(sourceVertices, vertexQueue, cpuCount),
                                            daemon=True)
 
@@ -217,12 +189,13 @@ def SourceVertexQueueAdder(sourceVertices, vertexQueue, cpuCount):
         os.killpg(0, SIGTERM)
 
 
-def SSCWorker(vertexQueue, SSCQueue, alphaThreshold, betaThreshold):
+def SSCWorker(vertexQueue, SSCQueue, adjacentLookup, alphaThreshold, betaThreshold, maxVertexNumber):
     thresholdExceeded = False
+    vertex = None
     while True:
         vertex = vertexQueue.get(block=True)
         if vertex is not None:
-            ssc = SSC1(vertex, alphaThreshold, betaThreshold)
+            ssc = SSC1(adjacentLookup, vertex, alphaThreshold, betaThreshold)
             if ssc is not None:
                 SSCQueue.put(ssc)
             else:
@@ -232,37 +205,37 @@ def SSCWorker(vertexQueue, SSCQueue, alphaThreshold, betaThreshold):
         else:
             break
     if thresholdExceeded:
-        emptyList = [-1] * nodeCount
+        emptyList = [-1] * maxVertexNumber
         bigDeltaTC = array('i', emptyList)
         smallDeltaTC = array('i', emptyList)
         del emptyList
-        d = bitarray(nodeCount)
-        SSCQueue.put(SSC2(vertex, bigDeltaTC, smallDeltaTC, d))
+        d = bitarray(maxVertexNumber)
+        SSCQueue.put(SSC2(adjacentLookup, vertex, bigDeltaTC, smallDeltaTC, d, maxVertexNumber))
         while True:
             vertex = vertexQueue.get(block=True)
             if vertex is not None:
-                SSCQueue.put(SSC2(vertex, bigDeltaTC, smallDeltaTC, d))
+                SSCQueue.put(SSC2(adjacentLookup, vertex, bigDeltaTC, smallDeltaTC, d, maxVertexNumber))
             else:
                 break
 
 
-def SSC1(sourceVertex, alphaThreshold, betaThreshold):
+def SSC1(adjacentLookup, sourceVertex, alphaThreshold, betaThreshold):
     tc = set()
     tc.add(sourceVertex)
     bigDeltaTC = set()
     bigDeltaTC.add(sourceVertex)
     while len(bigDeltaTC) != 0:
-        costs = ComputeSSC1Cost(bigDeltaTC, tc)
+        costs = ComputeSSC1Cost(adjacentLookup, bigDeltaTC, tc)
         if costs[0] > alphaThreshold or costs[1] > betaThreshold:
             print(str.format("Thresholds violated with C_smallDelta = {0} and C_bigDelta = {1}", costs[0], costs[1]))
             return None
-        smallDeltaTC = GetAllAdjacentNodesFromSet(bigDeltaTC)
+        smallDeltaTC = GetAllAdjacentNodesFromSet(adjacentLookup, bigDeltaTC)
         bigDeltaTC = smallDeltaTC.difference(tc)
         tc = tc.union(bigDeltaTC)
     return tc
 
 
-def ComputeSSC1Cost(bigDeltaTC, tc):
+def ComputeSSC1Cost(adjacentLookup, bigDeltaTC, tc):
     costSmallDelta = 0
     for vertex in bigDeltaTC:
         adjacent = adjacentLookup.get(vertex, None)
@@ -277,7 +250,7 @@ def ComputeSSC1Cost(bigDeltaTC, tc):
     return (costSmallDelta, costBigDelta)
 
 
-def SSC2(sourceVertex, bigDeltaTC, smallDeltaTC, d):
+def SSC2(adjacentLookup, sourceVertex, bigDeltaTC, smallDeltaTC, d, maxVertexNumber):
     tc = set()
     d.setall(False)
     d[sourceVertex] = True
@@ -287,7 +260,8 @@ def SSC2(sourceVertex, bigDeltaTC, smallDeltaTC, d):
         l = 0
         for i in range(0, L):
             Z = bigDeltaTC[i]
-            Z_Adjacent = GetAllAdjacentNodes(Z)
+            # Get all adjacent nodes.
+            Z_Adjacent = adjacentLookup.get(Z, set())
             for adjacentNode in Z_Adjacent:
                 if not d[adjacentNode]:
                     d[adjacentNode] = True
@@ -295,17 +269,13 @@ def SSC2(sourceVertex, bigDeltaTC, smallDeltaTC, d):
                     l += 1
         bigDeltaTC = smallDeltaTC[:]
         L = l
-    for i in range(0, nodeCount):
+    for i in range(0, maxVertexNumber):
         if d[i]:
             tc.add(i)
     return tc
 
 
-def GetAllAdjacentNodes(inputVertex):
-    return adjacentLookup.get(inputVertex, set())
-
-
-def GetAllAdjacentNodesFromSet(inputSet):
+def GetAllAdjacentNodesFromSet(adjacentLookup, inputSet):
     resultSet = set()
     for vertex in inputSet:
         adjacentSet = adjacentLookup.get(vertex, None)
@@ -314,19 +284,30 @@ def GetAllAdjacentNodesFromSet(inputSet):
     return resultSet
 
 
-startTime = timer()
-# Call SSC12 algorithm:
-computedClosure = Closure(sourceVertices, alpha, beta, len(allVertices))
-sortedClosure = sorted(computedClosure)
-endTime = timer()
-elapsedTime = endTime - startTime
-print("Elapsed time: " + str(elapsedTime) + " seconds.")
-print("Closure Size: " + str(len(computedClosure)))
-print("Writing closure output to file...")
-with open(outputFilename, 'w') as outputFile:
-    outputFile.write(str.format("# Run of SSC12 on input {0}\n", inputFilename))
-    outputFile.write(str.format("# Elapsed time: {0} seconds\n", elapsedTime))
-    outputFile.write('"Vertex"\n')
-    for vertex in sortedClosure:
-        outputFile.write('\"' + str(vertex) + '\"\n')
-print("Done!")
+def Main():
+    args = ParseArgs()
+    inputFilename = args.inputfile
+    if not os.path.isfile(inputFilename):
+        print("Input file does not exist: %s" % inputFilename)
+        exit(1)
+    outputFilename = GetValidOutputFilename(args.outputfile, args.overwrite, args.nofail)
+
+    (adjacentLookup, sourceVertices, vertexCount, maxVertexNumber) = ParseInputfile(inputFilename)
+    startTime = timer()
+    # Call SSC12 algorithm:
+    computedClosure = Closure(sourceVertices, adjacentLookup, args.alpha, args.beta, vertexCount, maxVertexNumber)
+    sortedClosure = sorted(computedClosure)
+    endTime = timer()
+    elapsedTime = endTime - startTime
+    print("Elapsed time: " + str(elapsedTime) + " seconds.")
+    print("Closure Size: " + str(len(computedClosure)))
+    print("Writing closure output to file...")
+    with open(outputFilename, 'w') as outputFile:
+        outputFile.write(str.format("# Run of SSC12 on input {0}\n", inputFilename))
+        outputFile.write(str.format("# Elapsed time: {0} seconds\n", elapsedTime))
+        outputFile.write('"Vertex"\n')
+        for vertex in sortedClosure:
+            outputFile.write('\"' + str(vertex) + '\"\n')
+    print("Done!")
+
+Main()
