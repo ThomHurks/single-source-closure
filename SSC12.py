@@ -30,18 +30,15 @@ import multiprocessing
 import argparse
 from queue import Full
 from signal import SIGTERM
-
-# Determine the cutoff point between SSC1 and SSC2
-# alpha = 1/8
-# beta = 1/128
+from fractions import Fraction
 
 
 def ParseArgs():
     parser = argparse.ArgumentParser(description='Run the SSC12 algorithm on an input graph')
     parser.add_argument('inputfile', action='store', type=str, help='The text file that the graph will be read from.', metavar='inputfile')
     parser.add_argument('outputfile', action='store', type=str, help='The file that the CSV output will be written to.', metavar='outputfile')
-    parser.add_argument('alpha', action='store', type=float, help='Determines the cutoff point between SSC1 and SSC2.', metavar='alpha')
-    parser.add_argument('beta', action='store', type=float, help='Determines the cutoff point between SSC1 and SSC2.', metavar='beta')
+    parser.add_argument('--alpha', action='store', required=False, type=Fraction, default=1/8, help='Determines the cutoff point between SSC1 and SSC2.', metavar='alpha')
+    parser.add_argument('--beta', action='store', required=False, type=Fraction, default=1/128, help='Determines the cutoff point between SSC1 and SSC2.', metavar='beta')
     parser.add_argument('--overwrite', action='store_true', required=False, help='Overwrite the output file if it already exists.')
     parser.add_argument('--nofail', action='store_true', required=False, help='Overwrite the output file if it already exists.')
     return parser.parse_args()
@@ -60,7 +57,7 @@ def GetValidOutputFilename(outputFilename, overwrite_file, nofail):
     else:
         (outputFilename, extension) = os.path.splitext(outputFilename)
         try:
-            outputFile = open(outputFilename + extension, 'x')
+            outputFile = open(str(outputFilename + extension), 'x')
             outputFilenameFinal = outputFilename + extension
         except FileExistsError:
             print("Output file already exists: %s" % (outputFilename + extension))
