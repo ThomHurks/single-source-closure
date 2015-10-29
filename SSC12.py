@@ -307,4 +307,5 @@ def Main():
             outputFile.write('\"' + str(vertex) + '\"\n')
     print("Done!")
 
-Main()
+if __name__ == "__main__":
+    Main()
