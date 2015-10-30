@@ -31,17 +31,26 @@ import argparse
 from queue import Full
 from signal import SIGTERM
 from fractions import Fraction
+from paramiko import *
 
 
 def ParseArgs():
     parser = argparse.ArgumentParser(description='Run the SSC12 algorithm on an input graph')
-    parser.add_argument('inputfile', action='store', type=str, help='The text file that the graph will be read from.', metavar='inputfile')
+    parser.add_argument('inputfile', action='store', type=ExistingFile, help='The text file that the graph will be read from.', metavar='inputfile')
     parser.add_argument('outputfile', action='store', type=str, help='The file that the CSV output will be written to.', metavar='outputfile')
     parser.add_argument('--alpha', action='store', required=False, type=Fraction, default=1/8, help='Determines the cutoff point between SSC1 and SSC2.', metavar='alpha')
     parser.add_argument('--beta', action='store', required=False, type=Fraction, default=1/128, help='Determines the cutoff point between SSC1 and SSC2.', metavar='beta')
     parser.add_argument('--overwrite', action='store_true', required=False, help='Overwrite the output file if it already exists.')
     parser.add_argument('--nofail', action='store_true', required=False, help='Overwrite the output file if it already exists.')
+    parser.add_argument('--pemfile', action='store', required=False, type=ExistingFile, help='The location of the PEM file to use for remote authentication.', metavar='pemfile')
     return parser.parse_args()
+
+
+def ExistingFile(filename):
+    if os.path.isfile(filename):
+        return filename
+    else:
+        raise argparse.ArgumentTypeError("%s is not a valid input file!" % filename)
 
 
 def GetValidOutputFilename(outputFilename, overwrite_file, nofail):
@@ -281,14 +290,27 @@ def GetAllAdjacentNodesFromSet(adjacentLookup, inputSet):
     return resultSet
 
 
+# Part of an experiment to run the SSC12 algorithm across multiple (EC2) instances. Still WIP.
+def ExecuteRemoteCommand(command, hostname, pemfile, username='ec2-user'):
+    try:
+        client = SSHClient()
+        client.load_system_host_keys()
+        client.set_missing_host_key_policy(AutoAddPolicy())
+        client.connect(str(hostname),
+                       username=str(username),
+                       key_filename=str(pemfile))
+        stdin, stdout, stderr = client.exec_command(str(command))
+        lines = stdout.read().splitlines()
+        for line in lines:
+            print(line)
+    except (BadHostKeyException, AuthenticationException, SSHException, IOError):
+        print("Error connecting to instance!")
+
+
 def Main():
     args = ParseArgs()
     inputFilename = args.inputfile
-    if not os.path.isfile(inputFilename):
-        print("Input file does not exist: %s" % inputFilename)
-        exit(1)
     outputFilename = GetValidOutputFilename(args.outputfile, args.overwrite, args.nofail)
-
     (adjacentLookup, sourceVertices, vertexCount, maxVertexNumber) = ParseInputfile(inputFilename)
     startTime = timer()
     # Call SSC12 algorithm:
