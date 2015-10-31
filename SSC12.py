@@ -1,3 +1,5 @@
+#! /usr/bin/env python3
+
 __author__ = 'Thom Hurks'
 # Implementation of a Hybrid Single Source Closure (SSC12) algorithm, specifically the transitive closure.
 # Made for the course Database Technology at the TU/e (University of Technology Eindhoven)
