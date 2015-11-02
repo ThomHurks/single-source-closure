@@ -176,6 +176,9 @@ def Closure(sourceVertices, adjacentLookup, alpha, beta, nrOfVertices, maxVertex
         doneCounter += 1
         sys.stdout.write("\rProgress: %d out of %d jobs completed." % (doneCounter, sourceVertexCount))
         sys.stdout.flush()
+        if adderProcess.exitcode is not None and adderProcess.exitcode != 0:
+            print("\nEncountered an error while adding jobs! Job queue was full.")
+            exit(1)
     return closureSet
 
 
@@ -191,10 +194,10 @@ def SourceVertexQueueAdder(sourceVertices, vertexQueue, cpuCount):
             vertexQueue.put(None, block=True)
             queueSize += 1
     except Full:
-        print("Queue full at size %d! Sending SIGTERM, goodbye." % queueSize)
-        # Exiting the daemon process with an error code is not detected by the parent process.
-        # This may be a bug in Python 3.5, so instead using the bruteforce way of sending SIGTERM to process 0.
-        os.killpg(0, SIGTERM)
+        vertexQueue.close()
+        vertexQueue.cancel_join_thread()
+        vertexQueue.join_thread()
+        exit(1)
 
 
 def SSCWorker(vertexQueue, SSCQueue, adjacentLookup, alphaThreshold, betaThreshold, maxVertexNumber):
