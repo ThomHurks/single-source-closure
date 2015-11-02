@@ -31,7 +31,6 @@ from bitarray import bitarray
 import multiprocessing
 import argparse
 from queue import Full
-from signal import SIGTERM
 from fractions import Fraction
 from paramiko import *
 
