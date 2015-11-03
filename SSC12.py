@@ -112,8 +112,12 @@ def ParseInputfile(inputFilename):
         for line in graphFile:
             lineResult = line_re.match(line)
             if lineResult is not None:
-                nr1 = int(lineResult.group("nr1"))
-                nr2 = int(lineResult.group("nr2"))
+                try:
+                    nr1 = int(lineResult.group("nr1"))
+                    nr2 = int(lineResult.group("nr2"))
+                except ValueError:
+                    print("Input graph cannot be parsed!")
+                    exit(1)
                 sourceVertices.add(nr1)
                 targetVertices.add(nr2)
                 maxVertexNumber = max(nr1, nr2, maxVertexNumber)
@@ -124,7 +128,7 @@ def ParseInputfile(inputFilename):
     uniqueTargetVertexCount = len(targetVertices.difference(sourceVertices))
     uniqueVertexCount = len(uniqueSourceVertices) + uniqueTargetVertexCount
     if maxVertexNumber <= 0 or uniqueVertexCount <= 1 or len(sourceVertices) == 0:
-        print("Input graph is empty!")
+        print("Input graph is empty or in the wrong format!")
         exit(1)
     # Since vertex numbers are 0 based and we want to fit the number 0 too.
     maxVertexNumber += 1
