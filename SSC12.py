@@ -102,8 +102,7 @@ def CreateUniqueOutputfile(outputFilename, extension):
 
 
 def ParseInputfile(inputFilename):
-    # Lines starting with "#" are ignored.
-    line_re = re.compile("^(?!#)(?P<nr1>\d+)\t(?P<nr2>\d+)")
+    line_re = re.compile("^(?P<nr1>\d+)\t(?P<nr2>\d+)$")
     maxVertexNumber = -1
     adjacentLookup = dict()
     sourceVertices = set()
@@ -111,21 +110,16 @@ def ParseInputfile(inputFilename):
     with open(inputFilename) as graphFile:
         # Start reading in the input file
         for line in graphFile:
-            lineResult = line_re.search(line)
+            lineResult = line_re.match(line)
             if lineResult is not None:
-                nr1 = lineResult.group("nr1")
-                nr2 = lineResult.group("nr2")
-                if nr1 is not None and nr2 is not None:
-                    nr1 = int(nr1)
-                    nr2 = int(nr2)
-                    sourceVertices.add(nr1)
-                    targetVertices.add(nr2)
-                    maxVertexNumber = max(nr1, nr2, maxVertexNumber)
-                    fromNode = adjacentLookup.get(nr1, set())
-                    fromNode.add(nr2)
-                    adjacentLookup[nr1] = fromNode
-                else:
-                    sys.exit("Input has wrong format!")
+                nr1 = int(lineResult.group("nr1"))
+                nr2 = int(lineResult.group("nr2"))
+                sourceVertices.add(nr1)
+                targetVertices.add(nr2)
+                maxVertexNumber = max(nr1, nr2, maxVertexNumber)
+                fromNode = adjacentLookup.get(nr1, set())
+                fromNode.add(nr2)
+                adjacentLookup[nr1] = fromNode
     uniqueSourceVertices = sourceVertices.difference(targetVertices)
     uniqueTargetVertexCount = len(targetVertices.difference(sourceVertices))
     uniqueVertexCount = len(uniqueSourceVertices) + uniqueTargetVertexCount
