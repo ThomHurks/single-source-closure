@@ -33,17 +33,35 @@ import argparse
 from queue import Full
 from fractions import Fraction
 from paramiko import *
-
+import pickle
 
 def ParseArgs():
     parser = argparse.ArgumentParser(description='Run the SSC12 algorithm on an input graph')
-    parser.add_argument('inputfile', action='store', type=ExistingFile, help='The text file that the graph will be read from.', metavar='inputfile')
-    parser.add_argument('outputfile', action='store', type=str, help='The file that the CSV output will be written to.', metavar='outputfile')
-    parser.add_argument('--alpha', action='store', required=False, type=Fraction, default=1/8, help='Determines the cutoff point between SSC1 and SSC2.', metavar='alpha')
-    parser.add_argument('--beta', action='store', required=False, type=Fraction, default=1/128, help='Determines the cutoff point between SSC1 and SSC2.', metavar='beta')
-    parser.add_argument('--overwrite', action='store_true', required=False, help='Overwrite the output file if it already exists.')
-    parser.add_argument('--nofail', action='store_true', required=False, help='Overwrite the output file if it already exists.')
-    parser.add_argument('--pemfile', action='store', required=False, type=ExistingFile, help='The location of the PEM file to use for remote authentication.', metavar='pemfile')
+    subparsers = parser.add_subparsers(help='List of available commands.', dest='command')
+
+    parser_compute = subparsers.add_parser('compute', help='Read in a plaintext graph or a preprocessed graph, compute the SSC and save the result to disk.')
+    parser_preprocess = subparsers.add_parser('preprocess', help='Only invoke the graph preprocessing algorithm and save the result to disk.')
+
+    parser_preprocess.add_argument('inputfile', action='store', type=ExistingFile, help='The text file that the graph will be read from.', metavar='inputfile')
+    parser_preprocess.add_argument('graphfile_output', action='store', type=str, help='The file that the preprocessed graph will be written to.', metavar='graphfile')
+    parser_preprocess.add_argument('sourcevertices_output', action='store', type=str, help='The file that the discovered source vertices will be written to.', metavar='sourcevertices')
+
+    parser_compute.add_argument('outputfile', action='store', type=str, help='The file that the SSC output will be written to.', metavar='outputfile')
+    parser_compute.add_argument('--alpha', action='store', required=False, type=Fraction, default=1/8, help='Determines the cutoff point between SSC1 and SSC2.', metavar='alpha')
+    parser_compute.add_argument('--beta', action='store', required=False, type=Fraction, default=1/128, help='Determines the cutoff point between SSC1 and SSC2.', metavar='beta')
+    parser_compute.add_argument('--overwrite', action='store_true', required=False, help='Overwrite the output file if it already exists.')
+    parser_compute.add_argument('--nofail', action='store_true', required=False, help='Overwrite the output file if it already exists.')
+    parser_compute.add_argument('--pemfile', action='store', required=False, type=ExistingFile, help='The location of the PEM file to use for remote authentication.', metavar='pemfile')
+
+    subparsers_compute = parser_compute.add_subparsers(help='List of available subcommands for computing the SSC.', dest='compute_subcommand')
+    subparser_compute_fresh = subparsers_compute.add_parser('fresh', help='Read the input graph, preprocess it, compute the SSC and save the result.')
+    subparser_compute_cache = subparsers_compute.add_parser('preprocessed', help='Read in a preprocessed graph, compute the SSC and save the result.')
+
+    subparser_compute_fresh.add_argument('inputfile', action='store', type=ExistingFile, help='The text file that the graph will be read from.', metavar='inputfile')
+
+    subparser_compute_cache.add_argument('graphfile_input', action='store', type=ExistingFile, help='The binary file that the preprocessed graph will be read from.', metavar='graphfile')
+    subparser_compute_cache.add_argument('sourcevertices_input', action='store', type=ExistingFile, help='The binary file that the source vertices will be read from.', metavar='sourcevertices')
+
     return parser.parse_args()
 
 
@@ -309,19 +327,26 @@ def ExecuteRemoteCommand(command, hostname, pemfile, username='ec2-user'):
         print("Error connecting to instance!")
 
 
-def Main():
-    args = ParseArgs()
-    inputFilename = args.inputfile
-    outputFilename = GetValidOutputFilename(args.outputfile, args.overwrite, args.nofail)
-    (adjacentLookup, sourceVertices, vertexCount, maxVertexNumber) = ParseInputfile(inputFilename)
-    startTime = timer()
-    # Call SSC12 algorithm:
-    computedClosure = Closure(sourceVertices, adjacentLookup, args.alpha, args.beta, vertexCount, maxVertexNumber)
-    sortedClosure = sorted(computedClosure)
-    endTime = timer()
-    elapsedTime = endTime - startTime
+def WritePreprocessedGraphToFile(adjacentLookup, sourceVertices, vertexCount, maxVertexNumber,
+                                 graphFilename, sourceVerticesFilename):
+    with open(graphFilename, 'w+b') as graphFile:
+        pickle.dump((adjacentLookup, vertexCount, maxVertexNumber), graphFile, protocol=pickle.HIGHEST_PROTOCOL)
+    with open(sourceVerticesFilename, 'w+b') as sourceVerticesFile:
+        pickle.dump(sourceVertices, sourceVerticesFile, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+def ReadPreprocessedGraphFromFile(graphFilename, sourceVerticesFilename):
+    with open(graphFilename, 'r+b') as graphFile:
+        (adjacentLookup, vertexCount, maxVertexNumber) = pickle.load(graphFile)
+    with open(sourceVerticesFilename, 'r+b') as sourceVerticesFile:
+        sourceVertices = pickle.load(sourceVerticesFile)
+    return adjacentLookup, sourceVertices, vertexCount, maxVertexNumber
+
+
+def WriteSSCOutputToFile(closure, outputFilename, inputFilename, elapsedTime):
+    sortedClosure = sorted(closure)
     print("Elapsed time: " + str(elapsedTime) + " seconds.")
-    print("Closure Size: " + str(len(computedClosure)))
+    print("Closure Size: " + str(len(sortedClosure)))
     print("Writing closure output to file...")
     with open(outputFilename, 'w') as outputFile:
         outputFile.write(str.format("# Run of SSC12 on input {0}\n", inputFilename))
@@ -329,7 +354,38 @@ def Main():
         outputFile.write('"Vertex"\n')
         for vertex in sortedClosure:
             outputFile.write('\"' + str(vertex) + '\"\n')
+
+
+def Main():
+    args = ParseArgs()
+    print(args)
+    if args.command == 'compute':
+        print("Computing the SSC.")
+        outputFilename = GetValidOutputFilename(args.outputfile, args.overwrite, args.nofail)
+        if args.compute_subcommand == 'fresh':
+            print("Performing a fresh computation from a text graph input file.")
+            (adjacentLookup, sourceVertices, vertexCount, maxVertexNumber) = ParseInputfile(args.inputfile)
+        elif args.compute_subcommand == 'preprocessed':
+            print("Performing a computation on a preprocessed graph input file.")
+            (adjacentLookup, sourceVertices, vertexCount, maxVertexNumber) = ReadPreprocessedGraphFromFile(args.graphfile_input, args.sourcevertices_input)
+        else:
+            print("Error parsing the compute subcommand from the arguments.")
+            exit(1)
+        # Call SSC12 algorithm:
+        startTime = timer()
+        computedClosure = Closure(sourceVertices, adjacentLookup, args.alpha, args.beta, vertexCount, maxVertexNumber)
+        endTime = timer()
+        WriteSSCOutputToFile(computedClosure, outputFilename, args.inputfile, endTime - startTime)
+    elif args.command == 'preprocess':
+        print("Only preprocessing the graph from a text graph input file.")
+        (adjacentLookup, sourceVertices, vertexCount, maxVertexNumber) = ParseInputfile(args.inputfile)
+        WritePreprocessedGraphToFile(adjacentLookup, sourceVertices, vertexCount, maxVertexNumber,
+                                     args.graphfile_output, args.sourcevertices_output)
+    else:
+        print("Error parsing the command from the arguments.")
+        exit(1)
     print("Done!")
+
 
 if __name__ == "__main__":
     Main()
