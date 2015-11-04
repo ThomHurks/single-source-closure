@@ -155,7 +155,7 @@ def ParseInputfile(inputFilename):
     print("Highest Vertex ID: %d" % maxVertexNumber)
     print("Vertex Count: %d" % uniqueVertexCount)
     print("Non-Source Vertices: %d" % uniqueTargetVertexCount)
-    print("Source Vertices: %d" % len(sourceVertices))
+    print("Source Vertices: %d" % len(uniqueSourceVertices))
     return adjacentLookup, uniqueSourceVertices, uniqueVertexCount, maxVertexNumber
 
 
@@ -330,11 +330,19 @@ def ExecuteRemoteCommand(command, hostname, pemfile, username='ec2-user'):
 
 
 def WritePreprocessedGraphToFile(adjacentLookup, sourceVertices, vertexCount, maxVertexNumber,
-                                 graphFilename, sourceVerticesFilename):
+                                 graphFilename, sourceVerticesFilename, verticesSplit=None):
     with open(graphFilename, 'w+b') as graphFile:
         pickle.dump((adjacentLookup, vertexCount, maxVertexNumber), graphFile, protocol=pickle.HIGHEST_PROTOCOL)
-    with open(sourceVerticesFilename, 'w+b') as sourceVerticesFile:
-        pickle.dump(sourceVertices, sourceVerticesFile, protocol=pickle.HIGHEST_PROTOCOL)
+    sourceVerticesList = list(sourceVertices)
+    if verticesSplit is not None and verticesSplit >= 1:
+        chunkSize = max(len(sourceVertices) // int(verticesSplit), 1)
+        for nr, index in enumerate(range(0, len(sourceVertices), chunkSize)):
+            subset = set(sourceVerticesList[index:index+chunkSize])
+            with open(sourceVerticesFilename + str(nr), 'w+b') as sourceVerticesFile:
+                pickle.dump(subset, sourceVerticesFile, protocol=pickle.HIGHEST_PROTOCOL)
+    else:
+        with open(sourceVerticesFilename, 'w+b') as sourceVerticesFile:
+            pickle.dump(sourceVertices, sourceVerticesFile, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def ReadPreprocessedGraphFromFile(graphFilename, sourceVerticesFilename):
