@@ -37,8 +37,11 @@ import pickle
 
 def ParseArgs():
     parser = argparse.ArgumentParser(description='Run the SSC12 algorithm on an input graph')
-    subparsers = parser.add_subparsers(help='List of available commands.', dest='command')
+    output_mutexgroup = parser.add_mutually_exclusive_group()
+    output_mutexgroup.add_argument('--overwrite', action='store_true', required=False, help='Overwrite any output files if they already exist.')
+    output_mutexgroup.add_argument('--unique', action='store_true', required=False, help='If the output file already exists, find a unique file name.')
 
+    subparsers = parser.add_subparsers(help='List of available commands.', dest='command')
     parser_compute = subparsers.add_parser('compute', help='Read in a plaintext graph or a preprocessed graph, compute the SSC and save the result to disk.')
     parser_preprocess = subparsers.add_parser('preprocess', help='Only invoke the graph preprocessing algorithm and save the result to disk.')
 
@@ -49,8 +52,6 @@ def ParseArgs():
     parser_compute.add_argument('outputfile', action='store', type=str, help='The file that the SSC output will be written to.', metavar='outputfile')
     parser_compute.add_argument('--alpha', action='store', required=False, type=Fraction, default=1/8, help='Determines the cutoff point between SSC1 and SSC2.', metavar='alpha')
     parser_compute.add_argument('--beta', action='store', required=False, type=Fraction, default=1/128, help='Determines the cutoff point between SSC1 and SSC2.', metavar='beta')
-    parser_compute.add_argument('--overwrite', action='store_true', required=False, help='Overwrite the output file if it already exists.')
-    parser_compute.add_argument('--nofail', action='store_true', required=False, help='Overwrite the output file if it already exists.')
     parser_compute.add_argument('--pemfile', action='store', required=False, type=ExistingFile, help='The location of the PEM file to use for remote authentication.', metavar='pemfile')
 
     subparsers_compute = parser_compute.add_subparsers(help='List of available subcommands for computing the SSC.', dest='compute_subcommand')
@@ -72,7 +73,7 @@ def ExistingFile(filename):
         raise argparse.ArgumentTypeError("%s is not a valid input file!" % filename)
 
 
-def GetValidOutputFilename(outputFilename, overwrite_file, nofail):
+def GetValidOutputFilename(outputFilename, overwrite_file, unique):
     outputFile = None
     outputFilenameFinal = ""
     if overwrite_file:
@@ -89,13 +90,14 @@ def GetValidOutputFilename(outputFilename, overwrite_file, nofail):
             outputFilenameFinal = outputFilename + extension
         except FileExistsError:
             print("Output file already exists: %s" % (outputFilename + extension))
-            if nofail:
+            if unique:
                 print("Attempting to find a unique file name...")
                 (outputFile, outputFilenameFinal) = CreateUniqueOutputfile(outputFilename, extension)
+                print("Using the unique file name '%s'" % outputFilenameFinal)
             else:
                 exit(1)
     if not outputFile.writable():
-        print("Couldn't write to output file!")
+        print("Couldn't write to output file '%s'!" % outputFilenameFinal)
         outputFile.close()
         exit(1)
     outputFile.close()
@@ -358,10 +360,9 @@ def WriteSSCOutputToFile(closure, outputFilename, inputFilename, elapsedTime):
 
 def Main():
     args = ParseArgs()
-    print(args)
     if args.command == 'compute':
         print("Computing the SSC.")
-        outputFilename = GetValidOutputFilename(args.outputfile, args.overwrite, args.nofail)
+        outputFilename = GetValidOutputFilename(args.outputfile, args.overwrite, args.unique)
         if args.compute_subcommand == 'fresh':
             print("Performing a fresh computation from a text graph input file.")
             (adjacentLookup, sourceVertices, vertexCount, maxVertexNumber) = ParseInputfile(args.inputfile)
@@ -378,9 +379,11 @@ def Main():
         WriteSSCOutputToFile(computedClosure, outputFilename, args.inputfile, endTime - startTime)
     elif args.command == 'preprocess':
         print("Only preprocessing the graph from a text graph input file.")
+        graphfile_output = GetValidOutputFilename(args.graphfile_output, args.overwrite, args.unique)
+        sourcevertices_output = GetValidOutputFilename(args.sourcevertices_output, args.overwrite, args.unique)
         (adjacentLookup, sourceVertices, vertexCount, maxVertexNumber) = ParseInputfile(args.inputfile)
         WritePreprocessedGraphToFile(adjacentLookup, sourceVertices, vertexCount, maxVertexNumber,
-                                     args.graphfile_output, args.sourcevertices_output)
+                                     graphfile_output, sourcevertices_output)
     else:
         print("Error parsing the command from the arguments.")
         exit(1)
