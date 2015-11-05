@@ -377,9 +377,11 @@ def Main():
         outputFilename = GetValidOutputFilename(args.outputfile, args.overwrite, args.unique)
         if args.compute_subcommand == 'fresh':
             print("Performing a fresh computation from a text graph input file.")
+            inputFilename = args.inputfile
             (adjacentLookup, sourceVertices, vertexCount, maxVertexNumber) = ParseInputfile(args.inputfile)
         elif args.compute_subcommand == 'preprocessed':
             print("Performing a computation on a preprocessed graph input file.")
+            inputFilename = args.graphfile_input
             (adjacentLookup, sourceVertices, vertexCount, maxVertexNumber) = ReadPreprocessedGraphFromFile(args.graphfile_input, args.sourcevertices_input)
         else:
             print("Error parsing the compute subcommand from the arguments.")
@@ -388,7 +390,7 @@ def Main():
         startTime = timer()
         computedClosure = Closure(sourceVertices, adjacentLookup, args.alpha, args.beta, vertexCount, maxVertexNumber)
         endTime = timer()
-        WriteSSCOutputToFile(computedClosure, outputFilename, args.inputfile, endTime - startTime)
+        WriteSSCOutputToFile(computedClosure, outputFilename, inputFilename, endTime - startTime)
     elif args.command == 'preprocess':
         print("Only preprocessing the graph from a text graph input file.")
         graphfile_output = GetValidOutputFilename(args.graphfile_output, args.overwrite, args.unique)
