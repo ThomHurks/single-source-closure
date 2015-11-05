@@ -48,6 +48,7 @@ def ParseArgs():
     parser_preprocess.add_argument('inputfile', action='store', type=ExistingFile, help='The text file that the graph will be read from.', metavar='inputfile')
     parser_preprocess.add_argument('graphfile_output', action='store', type=str, help='The file that the preprocessed graph will be written to.', metavar='graphfile')
     parser_preprocess.add_argument('sourcevertices_output', action='store', type=str, help='The file that the discovered source vertices will be written to.', metavar='sourcevertices')
+    parser_preprocess.add_argument('--nrofvertexfiles', action='store', required=False, type=int, default=None, help='The source vertices are divided over <nrofvertexfiles> files, using the format <sourcevertices>_nr.extension', metavar='nrofvertexfiles')
 
     parser_compute.add_argument('outputfile', action='store', type=str, help='The file that the SSC output will be written to.', metavar='outputfile')
     parser_compute.add_argument('--alpha', action='store', required=False, type=Fraction, default=1/8, help='Determines the cutoff point between SSC1 and SSC2.', metavar='alpha')
@@ -330,7 +331,7 @@ def ExecuteRemoteCommand(command, hostname, pemfile, username='ec2-user'):
 
 
 def WritePreprocessedGraphToFile(adjacentLookup, sourceVertices, vertexCount, maxVertexNumber,
-                                 graphFilename, sourceVerticesFilename, verticesSplit=None):
+                                 graphFilename, sourceVerticesFilename, overwrite, verticesSplit=None):
     with open(graphFilename, 'w+b') as graphFile:
         pickle.dump((adjacentLookup, vertexCount, maxVertexNumber), graphFile, protocol=pickle.HIGHEST_PROTOCOL)
     sourceVerticesList = list(sourceVertices)
@@ -338,7 +339,10 @@ def WritePreprocessedGraphToFile(adjacentLookup, sourceVertices, vertexCount, ma
         chunkSize = max(len(sourceVertices) // int(verticesSplit), 1)
         for nr, index in enumerate(range(0, len(sourceVertices), chunkSize)):
             subset = set(sourceVerticesList[index:index+chunkSize])
-            with open(sourceVerticesFilename + str(nr), 'w+b') as sourceVerticesFile:
+            (filename, extension) = os.path.splitext(sourceVerticesFilename)
+            filename = filename + "_" + str(nr) + extension
+            filename = GetValidOutputFilename(filename, overwrite, False)
+            with open(filename, 'w+b') as sourceVerticesFile:
                 pickle.dump(subset, sourceVerticesFile, protocol=pickle.HIGHEST_PROTOCOL)
     else:
         with open(sourceVerticesFilename, 'w+b') as sourceVerticesFile:
@@ -391,7 +395,7 @@ def Main():
         sourcevertices_output = GetValidOutputFilename(args.sourcevertices_output, args.overwrite, args.unique)
         (adjacentLookup, sourceVertices, vertexCount, maxVertexNumber) = ParseInputfile(args.inputfile)
         WritePreprocessedGraphToFile(adjacentLookup, sourceVertices, vertexCount, maxVertexNumber,
-                                     graphfile_output, sourcevertices_output)
+                                     graphfile_output, sourcevertices_output, args.overwrite, args.nrofvertexfiles)
     else:
         print("Error parsing the command from the arguments.")
         exit(1)
