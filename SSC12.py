@@ -164,7 +164,7 @@ def ParseInputfile(inputFilename):
 def Closure(sourceVertices, adjacentLookup, alpha, beta, nrOfVertices, maxVertexNumber):
     # Setup multiprocessing:
     cpuCount = min(multiprocessing.cpu_count(), len(sourceVertices))
-    print("Beginning closure processing with %d parallel threads and thresholds alpha = %d and beta = %d..." %
+    print("Beginning closure processing with %d parallel threads and thresholds alpha = %g and beta = %g..." %
           (cpuCount, alpha, beta))
     sourceVertexCount = len(sourceVertices)
     closureSet = set()
@@ -174,7 +174,7 @@ def Closure(sourceVertices, adjacentLookup, alpha, beta, nrOfVertices, maxVertex
 
     alphaThreshold = nrOfVertices / alpha
     betaThreshold = nrOfVertices / beta
-    print(str.format("Thresholds in terms of n: alpha = {0}, beta = {1}, n = {2}", alphaThreshold, betaThreshold, nrOfVertices))
+    print("Thresholds in terms of n: alpha = %g, beta = %g, n = %d" % (alphaThreshold, betaThreshold, nrOfVertices))
 
     for _ in range(0, cpuCount):
         processList.append(multiprocessing.Process(target=SSCWorker, args=(vertexQueue, SSCQueue, adjacentLookup,
