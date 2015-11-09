@@ -123,6 +123,7 @@ def CreateUniqueOutputfile(outputFilename, extension):
 
 
 def ParseInputfile(inputFilename):
+    startTime = timer()
     line_re = re.compile("^(?P<nr1>\d+)\t(?P<nr2>\d+)$")
     maxVertexNumber = -1
     adjacentLookup = dict()
@@ -153,6 +154,7 @@ def ParseInputfile(inputFilename):
         exit(1)
     # Since vertex numbers are 0 based and we want to fit the number 0 too.
     maxVertexNumber += 1
+    print("Took %g seconds to parse the input file." % (timer() - startTime))
     print("Highest Vertex ID: %d" % maxVertexNumber)
     print("Vertex Count: %d" % uniqueVertexCount)
     print("Non-Source Vertices: %d" % uniqueTargetVertexCount)
@@ -197,6 +199,7 @@ def Closure(sourceVertices, adjacentLookup, alpha, beta, nrOfVertices, maxVertex
         if adderProcess.exitcode is not None and adderProcess.exitcode != 0:
             print("\nEncountered an error while adding jobs! Job queue was full.")
             exit(1)
+    print("\r")
     return closureSet
 
 
