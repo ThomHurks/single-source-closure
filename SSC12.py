@@ -367,7 +367,7 @@ def WriteSSCOutputToFile(closure, outputFilename, inputFilename, elapsedTime):
         outputFile.write(str.format("# Elapsed time: {0} seconds\n", elapsedTime))
         outputFile.write('"Vertex"\n')
         for vertex in sortedClosure:
-            outputFile.write('\"' + str(vertex) + '\"\n')
+            outputFile.write("%s\n" % str(vertex))
 
 
 def Main():
